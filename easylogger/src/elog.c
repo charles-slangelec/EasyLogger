@@ -1,7 +1,7 @@
 /*
  * This file is part of the EasyLogger Library.
  *
- * Copyright (c) 2015-2018, Armink, <armink.ztl@gmail.com>
+ * Copyright (c) 2015-2016, Armink, <armink.ztl@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -32,116 +32,71 @@
 #include <string.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <arpa/inet.h>      /* inet(3) functions */
 
 #if !defined(ELOG_OUTPUT_LVL)
-    #error "Please configure static output log level (in elog_cfg.h)"
+#error "Please configure static output log level (in elog_cfg.h)"
 #endif
 
 #if !defined(ELOG_LINE_NUM_MAX_LEN)
-    #error "Please configure output line number max length (in elog_cfg.h)"
+#error "Please configure output line number max length (in elog_cfg.h)"
 #endif
 
 #if !defined(ELOG_LINE_BUF_SIZE)
-    #error "Please configure buffer size for every line's log (in elog_cfg.h)"
+#error "Please configure buffer size for every line's log (in elog_cfg.h)"
 #endif
 
 #if !defined(ELOG_FILTER_TAG_MAX_LEN)
-    #error "Please configure output filter's tag max length (in elog_cfg.h)"
+#error "Please configure output filter's tag max length (in elog_cfg.h)"
 #endif
 
 #if !defined(ELOG_FILTER_KW_MAX_LEN)
-    #error "Please configure output filter's keyword max length (in elog_cfg.h)"
+#error "Please configure output filter's keyword max length (in elog_cfg.h)"
 #endif
 
 #if !defined(ELOG_NEWLINE_SIGN)
-    #error "Please configure output newline sign (in elog_cfg.h)"
+#error "Please configure output newline sign (in elog_cfg.h)"
 #endif
 
-/* output filter's tag level max num */
-#ifndef ELOG_FILTER_TAG_LVL_MAX_NUM
-#define ELOG_FILTER_TAG_LVL_MAX_NUM          4
-#endif
-
+/* level output info */
+const char *level_output_info[] = {
+    [ELOG_LVL_ASSERT]  = "ASSERT ",
+    [ELOG_LVL_ERROR]   = "ERROR  ",
+    [ELOG_LVL_WARN]    = "WARN   ",
+    [ELOG_LVL_INFO]    = "INFO   ",
+    [ELOG_LVL_DEBUG]   = "DEBUG  ",
+    [ELOG_LVL_VERBOSE] = "VERBOSE",
+};
 #ifdef ELOG_COLOR_ENABLE
-/**
- * CSI(Control Sequence Introducer/Initiator) sign
- * more information on https://en.wikipedia.org/wiki/ANSI_escape_code
- */
-#define CSI_START                      "\033["
-#define CSI_END                        "\033[0m"
-/* output log front color */
-#define F_BLACK                        "30;"
-#define F_RED                          "31;"
-#define F_GREEN                        "32;"
-#define F_YELLOW                       "33;"
-#define F_BLUE                         "34;"
-#define F_MAGENTA                      "35;"
-#define F_CYAN                         "36;"
-#define F_WHITE                        "37;"
-/* output log background color */
-#define B_NULL
-#define B_BLACK                        "40;"
-#define B_RED                          "41;"
-#define B_GREEN                        "42;"
-#define B_YELLOW                       "43;"
-#define B_BLUE                         "44;"
-#define B_MAGENTA                      "45;"
-#define B_CYAN                         "46;"
-#define B_WHITE                        "47;"
-/* output log fonts style */
-#define S_BOLD                         "1m"
-#define S_UNDERLINE                    "4m"
-#define S_BLINK                        "5m"
-#define S_NORMAL                       "22m"
-/* output log default color definition: [front color] + [background color] + [show style] */
-#ifndef ELOG_COLOR_ASSERT
-#define ELOG_COLOR_ASSERT              (F_MAGENTA B_NULL S_NORMAL)
-#endif
-#ifndef ELOG_COLOR_ERROR
-#define ELOG_COLOR_ERROR               (F_RED B_NULL S_NORMAL)
-#endif
-#ifndef ELOG_COLOR_WARN
-#define ELOG_COLOR_WARN                (F_YELLOW B_NULL S_NORMAL)
-#endif
-#ifndef ELOG_COLOR_INFO
-#define ELOG_COLOR_INFO                (F_CYAN B_NULL S_NORMAL)
-#endif
-#ifndef ELOG_COLOR_DEBUG
-#define ELOG_COLOR_DEBUG               (F_GREEN B_NULL S_NORMAL)
-#endif
-#ifndef ELOG_COLOR_VERBOSE
-#define ELOG_COLOR_VERBOSE             (F_BLUE B_NULL S_NORMAL)
-#endif
+/* color output info */
+#ifdef __LINUX__
+const char *color_output_info[] = {
+    [ELOG_LVL_ASSERT] = ELOG_COLOR_ASSERT,
+    [ELOG_LVL_ERROR] = ELOG_COLOR_ERROR,
+    [ELOG_LVL_WARN] = ELOG_COLOR_WARN,
+    [ELOG_LVL_INFO] = ELOG_COLOR_INFO,
+    [ELOG_LVL_DEBUG] = ELOG_COLOR_DEBUG,
+    [ELOG_LVL_VERBOSE] = ELOG_COLOR_VERBOSE,
+};
+#endif /* __LINUX__ */
+#ifdef __WIN32__
+const WORD color_output_info[] = {
+    [ELOG_LVL_ASSERT] = ELOG_COLOR_ASSERT,
+    [ELOG_LVL_ERROR] = ELOG_COLOR_ERROR,
+    [ELOG_LVL_WARN] = ELOG_COLOR_WARN,
+    [ELOG_LVL_INFO] = ELOG_COLOR_INFO,
+    [ELOG_LVL_DEBUG] = ELOG_COLOR_DEBUG,
+    [ELOG_LVL_VERBOSE] = ELOG_COLOR_VERBOSE,
+};
+#endif /* __WIN32__ */
 #endif /* ELOG_COLOR_ENABLE */
 
 /* EasyLogger object */
 static EasyLogger elog;
 /* every line log's buffer */
 static char log_buf[ELOG_LINE_BUF_SIZE] = { 0 };
-/* level output info */
-static const char *level_output_info[] = {
-        [ELOG_LVL_ASSERT]  = "A/",
-        [ELOG_LVL_ERROR]   = "E/",
-        [ELOG_LVL_WARN]    = "W/",
-        [ELOG_LVL_INFO]    = "I/",
-        [ELOG_LVL_DEBUG]   = "D/",
-        [ELOG_LVL_VERBOSE] = "V/",
-};
-
-#ifdef ELOG_COLOR_ENABLE
-/* color output info */
-static const char *color_output_info[] = {
-        [ELOG_LVL_ASSERT]  = ELOG_COLOR_ASSERT,
-        [ELOG_LVL_ERROR]   = ELOG_COLOR_ERROR,
-        [ELOG_LVL_WARN]    = ELOG_COLOR_WARN,
-        [ELOG_LVL_INFO]    = ELOG_COLOR_INFO,
-        [ELOG_LVL_DEBUG]   = ELOG_COLOR_DEBUG,
-        [ELOG_LVL_VERBOSE] = ELOG_COLOR_VERBOSE,
-};
-#endif /* ELOG_COLOR_ENABLE */
 
 static bool get_fmt_enabled(uint8_t level, size_t set);
-static void elog_set_filter_tag_lvl_default();
 
 /* EasyLogger assert hook */
 void (*elog_assert_hook)(const char* expr, const char* func, size_t line);
@@ -160,10 +115,6 @@ ElogErrCode elog_init(void) {
     extern ElogErrCode elog_async_init(void);
 
     ElogErrCode result = ELOG_NO_ERR;
-
-    if (elog.init_ok == true) {
-        return result;
-    }
 
     /* port initialize */
     result = elog_port_init();
@@ -192,10 +143,8 @@ ElogErrCode elog_init(void) {
     /* set level is ELOG_LVL_VERBOSE */
     elog_set_filter_lvl(ELOG_LVL_VERBOSE);
 
-    /* set tag_level to default val */
-    elog_set_filter_tag_lvl_default();
-
-    elog.init_ok = true;
+    /* enable text print by default */
+    elog_set_text_print_enabled(true);
 
     return result;
 }
@@ -231,7 +180,7 @@ void elog_set_output_enabled(bool enabled) {
 #ifdef ELOG_COLOR_ENABLE
 /**
  * set log text color enable or disable
- * 
+ *
  * @param enabled TRUE: enable FALSE:disable
  */
 void elog_set_text_color_enabled(bool enabled) {
@@ -296,6 +245,15 @@ void elog_set_filter_lvl(uint8_t level) {
 }
 
 /**
+ * get log filter's level
+ *
+ * @param level level
+ */
+uint8_t elog_get_filter_lvl(void) {
+    return elog.filter.level;
+}
+
+/**
  * set log filter's tag
  *
  * @param tag tag
@@ -314,7 +272,16 @@ void elog_set_filter_kw(const char *keyword) {
 }
 
 /**
- * lock output 
+ * get log filter's keyword
+ *
+ * @param keyword keyword
+ */
+char* elog_get_filter_kw() {
+    return elog.filter.keyword;
+}
+
+/**
+ * lock output
  */
 void elog_output_lock(void) {
     if (elog.output_lock_enabled) {
@@ -335,115 +302,6 @@ void elog_output_unlock(void) {
     } else {
         elog.output_is_locked_before_enable = false;
     }
-}
-
-/**
- * set log filter's tag level val to default
- */
-static void elog_set_filter_tag_lvl_default()
-{
-    uint8_t i = 0;
-
-    for (i =0; i< ELOG_FILTER_TAG_LVL_MAX_NUM; i++){
-        memset(elog.filter.tag_lvl[i].tag, '\0', ELOG_FILTER_TAG_MAX_LEN + 1);
-        elog.filter.tag_lvl[i].level = ELOG_FILTER_LVL_SILENT;
-        elog.filter.tag_lvl[i].tag_use_flag = false;
-    }
-}
-
-/**
- * Set the filter's level by different tag.
- * The log on this tag which level is less than it will stop output.
- *
- * example:
- *     // the example tag log enter silent mode
- *     elog_set_filter_tag_lvl("example", ELOG_FILTER_LVL_SILENT);
- *     // the example tag log which level is less than INFO level will stop output
- *     elog_set_filter_tag_lvl("example", ELOG_LVL_INFO);
- *     // remove example tag's level filter, all level log will resume output
- *     elog_set_filter_tag_lvl("example", ELOG_FILTER_LVL_ALL);
- *
- * @param tag log tag
- * @param level The filter level. When the level is ELOG_FILTER_LVL_SILENT, the log enter silent mode.
- *        When the level is ELOG_FILTER_LVL_ALL, it will remove this tag's level filer.
- *        Then all level log will resume output.
- *
- */
-void elog_set_filter_tag_lvl(const char *tag, uint8_t level)
-{
-    ELOG_ASSERT(level <= ELOG_LVL_VERBOSE);
-    ELOG_ASSERT(tag != ((void *)0));
-    uint8_t i = 0;
-
-    if (!elog.init_ok) {
-        return;
-    }
-
-    elog_port_output_lock();
-    /* find the tag in arr */
-    for (i =0; i< ELOG_FILTER_TAG_LVL_MAX_NUM; i++){
-        if (elog.filter.tag_lvl[i].tag_use_flag == true &&
-            !strncmp(tag, elog.filter.tag_lvl[i].tag,ELOG_FILTER_TAG_MAX_LEN)){
-            break;
-        }
-    }
-
-    if (i < ELOG_FILTER_TAG_LVL_MAX_NUM){
-        /* find OK */
-        if (level == ELOG_FILTER_LVL_ALL){
-            /* remove current tag's level filter when input level is the lowest level */
-             elog.filter.tag_lvl[i].tag_use_flag = false;
-             memset(elog.filter.tag_lvl[i].tag, '\0', ELOG_FILTER_TAG_MAX_LEN + 1);
-             elog.filter.tag_lvl[i].level = ELOG_FILTER_LVL_SILENT;
-        } else{
-            elog.filter.tag_lvl[i].level = level;
-        }
-    } else{
-        /* only add the new tag's level filer when level is not ELOG_FILTER_LVL_ALL */
-        if (level != ELOG_FILTER_LVL_ALL){
-            for (i =0; i< ELOG_FILTER_TAG_LVL_MAX_NUM; i++){
-                if (elog.filter.tag_lvl[i].tag_use_flag == false){
-                    strncpy(elog.filter.tag_lvl[i].tag, tag, ELOG_FILTER_TAG_MAX_LEN);
-                    elog.filter.tag_lvl[i].level = level;
-                    elog.filter.tag_lvl[i].tag_use_flag = true;
-                    break;
-                }
-            }
-        }
-    }
-    elog_output_unlock();
-}
-
-/**
- * get the level on tag's level filer
- *
- * @param tag tag
- *
- * @return It will return the lowest level when tag was not found.
- *         Other level will return when tag was found.
- */
-uint8_t elog_get_filter_tag_lvl(const char *tag)
-{
-    ELOG_ASSERT(tag != ((void *)0));
-    uint8_t i = 0;
-    uint8_t level = ELOG_FILTER_LVL_ALL;
-
-    if (!elog.init_ok) {
-        return level;
-    }
-
-    elog_port_output_lock();
-    /* find the tag in arr */
-    for (i =0; i< ELOG_FILTER_TAG_LVL_MAX_NUM; i++){
-        if (elog.filter.tag_lvl[i].tag_use_flag == true &&
-            !strncmp(tag, elog.filter.tag_lvl[i].tag,ELOG_FILTER_TAG_MAX_LEN)){
-            level = elog.filter.tag_lvl[i].level;
-            break;
-        }
-    }
-    elog_output_unlock();
-
-    return level;
 }
 
 /**
@@ -479,9 +337,8 @@ void elog_raw(const char *format, ...) {
     }
     /* output log */
 #if defined(ELOG_ASYNC_OUTPUT_ENABLE)
-    extern void elog_async_output(uint8_t level, const char *log, size_t size);
-    /* raw log will using assert level */
-    elog_async_output(ELOG_LVL_ASSERT, log_buf, log_len);
+    extern void elog_async_output(const char *log, size_t size);
+    elog_async_output(log_buf, log_len);
 #elif defined(ELOG_BUF_OUTPUT_ENABLE)
     extern void elog_buf_output(const char *log, size_t size);
     elog_buf_output(log_buf, log_len);
@@ -489,7 +346,7 @@ void elog_raw(const char *format, ...) {
     elog_port_output(log_buf, log_len);
 #endif
     /* unlock output */
-    elog_output_unlock();
+    elog_port_output_unlock();
 
     va_end(args);
 }
@@ -507,14 +364,13 @@ void elog_raw(const char *format, ...) {
  *
  */
 void elog_output(uint8_t level, const char *tag, const char *file, const char *func,
-        const long line, const char *format, ...) {
+                 const long line, const char *format, ...) {
     extern const char *elog_port_get_time(void);
     extern const char *elog_port_get_p_info(void);
     extern const char *elog_port_get_t_info(void);
 
-    size_t tag_len = strlen(tag), log_len = 0, newline_len = strlen(ELOG_NEWLINE_SIGN);
+    size_t log_len = 0, newline_len = strlen(ELOG_NEWLINE_SIGN);
     char line_num[ELOG_LINE_NUM_MAX_LEN + 1] = { 0 };
-    char tag_sapce[ELOG_FILTER_TAG_MAX_LEN / 2 + 1] = { 0 };
     va_list args;
     int fmt_result;
 
@@ -525,9 +381,10 @@ void elog_output(uint8_t level, const char *tag, const char *file, const char *f
         return;
     }
     /* level filter */
-    if (level > elog.filter.level || level > elog_get_filter_tag_lvl(tag)) {
+    if (level > elog.filter.level) {
         return;
     } else if (!strstr(tag, elog.filter.tag)) { /* tag filter */
+        //TODO 可以考虑采用KMP及朴素模式匹配字符串，提升性能
         return;
     }
     /* args point to the first variable parameter */
@@ -535,6 +392,7 @@ void elog_output(uint8_t level, const char *tag, const char *file, const char *f
     /* lock output */
     elog_output_lock();
 
+#ifdef __LINUX__
 #ifdef ELOG_COLOR_ENABLE
     /* add CSI start sign and color info */
     if (elog.text_color_enabled) {
@@ -542,31 +400,34 @@ void elog_output(uint8_t level, const char *tag, const char *file, const char *f
         log_len += elog_strcpy(log_len, log_buf + log_len, color_output_info[level]);
     }
 #endif
+#endif /* __LINUX__ */
 
     /* package level info */
     if (get_fmt_enabled(level, ELOG_FMT_LVL)) {
+        log_len += elog_strcpy(log_len, log_buf + log_len, "[");
         log_len += elog_strcpy(log_len, log_buf + log_len, level_output_info[level]);
+        log_len += elog_strcpy(log_len, log_buf + log_len, "] ");
+    }
+    /* package time info */
+    if (get_fmt_enabled(level, ELOG_FMT_TIME)) {
+        log_len += elog_strcpy(log_len, log_buf + log_len, elog_port_get_time());
+        log_len += elog_strcpy(log_len, log_buf + log_len, " - ");
     }
     /* package tag info */
     if (get_fmt_enabled(level, ELOG_FMT_TAG)) {
+        log_len += elog_strcpy(log_len, log_buf + log_len, "(");
         log_len += elog_strcpy(log_len, log_buf + log_len, tag);
         /* if the tag length is less than 50% ELOG_FILTER_TAG_MAX_LEN, then fill space */
-        if (tag_len <= ELOG_FILTER_TAG_MAX_LEN / 2) {
-            memset(tag_sapce, ' ', ELOG_FILTER_TAG_MAX_LEN / 2 - tag_len);
-            log_len += elog_strcpy(log_len, log_buf + log_len, tag_sapce);
-        }
-        log_len += elog_strcpy(log_len, log_buf + log_len, " ");
+        //size_t tag_len = strlen(tag);
+        //char tag_sapce[ELOG_FILTER_TAG_MAX_LEN / 2 + 1] = { 0 };
+        //if (tag_len <= ELOG_FILTER_TAG_MAX_LEN / 2) {
+        //    memset(tag_sapce, ' ', ELOG_FILTER_TAG_MAX_LEN / 2 - tag_len);
+        //    log_len += elog_strcpy(log_len, log_buf + log_len, tag_sapce);
+        //}
+        log_len += elog_strcpy(log_len, log_buf + log_len, ")");
     }
-    /* package time, process and thread info */
-    if (get_fmt_enabled(level, ELOG_FMT_TIME | ELOG_FMT_P_INFO | ELOG_FMT_T_INFO)) {
-        log_len += elog_strcpy(log_len, log_buf + log_len, "[");
-        /* package time info */
-        if (get_fmt_enabled(level, ELOG_FMT_TIME)) {
-            log_len += elog_strcpy(log_len, log_buf + log_len, elog_port_get_time());
-            if (get_fmt_enabled(level, ELOG_FMT_P_INFO | ELOG_FMT_T_INFO)) {
-                log_len += elog_strcpy(log_len, log_buf + log_len, " ");
-            }
-        }
+    /* package file directory and name, function name and line number, process and thread  info */
+    if (get_fmt_enabled(level, ELOG_FMT_DIR | ELOG_FMT_FUNC | ELOG_FMT_LINE | ELOG_FMT_P_INFO | ELOG_FMT_T_INFO)) {
         /* package process info */
         if (get_fmt_enabled(level, ELOG_FMT_P_INFO)) {
             log_len += elog_strcpy(log_len, log_buf + log_len, elog_port_get_p_info());
@@ -578,11 +439,9 @@ void elog_output(uint8_t level, const char *tag, const char *file, const char *f
         if (get_fmt_enabled(level, ELOG_FMT_T_INFO)) {
             log_len += elog_strcpy(log_len, log_buf + log_len, elog_port_get_t_info());
         }
-        log_len += elog_strcpy(log_len, log_buf + log_len, "] ");
-    }
-    /* package file directory and name, function name and line number info */
-    if (get_fmt_enabled(level, ELOG_FMT_DIR | ELOG_FMT_FUNC | ELOG_FMT_LINE)) {
-        log_len += elog_strcpy(log_len, log_buf + log_len, "(");
+        if (get_fmt_enabled(level, ELOG_FMT_P_INFO | ELOG_FMT_T_INFO)) {
+            log_len += elog_strcpy(log_len, log_buf + log_len, " ");
+        }
         /* package time info */
         if (get_fmt_enabled(level, ELOG_FMT_DIR)) {
             log_len += elog_strcpy(log_len, log_buf + log_len, file);
@@ -601,10 +460,11 @@ void elog_output(uint8_t level, const char *tag, const char *file, const char *f
         }
         /* package thread info */
         if (get_fmt_enabled(level, ELOG_FMT_LINE)) {
+            //TODO snprintf资源占用可能较高，待优化
             snprintf(line_num, ELOG_LINE_NUM_MAX_LEN, "%ld", line);
             log_len += elog_strcpy(log_len, log_buf + log_len, line_num);
         }
-        log_len += elog_strcpy(log_len, log_buf + log_len, ")");
+        log_len += elog_strcpy(log_len, log_buf + log_len, ":>> ");
     }
     /* package other log data to buffer. '\0' must be added in the end by vsnprintf. */
     fmt_result = vsnprintf(log_buf + log_len, ELOG_LINE_BUF_SIZE - log_len, format, args);
@@ -644,19 +504,21 @@ void elog_output(uint8_t level, const char *tag, const char *file, const char *f
         }
     }
 
+#ifdef __LINUX__
 #ifdef ELOG_COLOR_ENABLE
     /* add CSI end sign */
     if (elog.text_color_enabled) {
         log_len += elog_strcpy(log_len, log_buf + log_len, CSI_END);
     }
 #endif
+#endif /* __LINUX__ */
 
     /* package newline sign */
     log_len += elog_strcpy(log_len, log_buf + log_len, ELOG_NEWLINE_SIGN);
     /* output log */
 #if defined(ELOG_ASYNC_OUTPUT_ENABLE)
-    extern void elog_async_output(uint8_t level, const char *log, size_t size);
-    elog_async_output(level, log_buf, log_len);
+    extern void elog_async_output(const char *log, size_t size);
+    elog_async_output(log_buf, log_len);
 #elif defined(ELOG_BUF_OUTPUT_ENABLE)
     extern void elog_buf_output(const char *log, size_t size);
     elog_buf_output(log_buf, log_len);
@@ -732,27 +594,14 @@ int8_t elog_find_lvl(const char *log) {
     ELOG_ASSERT(elog.enabled_fmt_set[ELOG_LVL_DEBUG] & ELOG_FMT_LVL);
     ELOG_ASSERT(elog.enabled_fmt_set[ELOG_LVL_VERBOSE] & ELOG_FMT_LVL);
 
-#ifdef ELOG_COLOR_ENABLE
-    uint8_t i;
-    size_t csi_start_len = strlen(CSI_START);
-    for(i = 0; i < ELOG_LVL_TOTAL_NUM; i ++) {
-        if (!strncmp(color_output_info[i], log + csi_start_len, strlen(color_output_info[i]))) {
+    int8_t i = 0;
+    for(i = 0; i < ELOG_LVL_TOTAL_NUM; i++) {
+        if (strstr(log, level_output_info[i])) {
             return i;
         }
     }
-    /* found failed */
+
     return -1;
-#else
-    switch (log[0]) {
-    case 'A': return ELOG_LVL_ASSERT;
-    case 'E': return ELOG_LVL_ERROR;
-    case 'W': return ELOG_LVL_WARN;
-    case 'I': return ELOG_LVL_INFO;
-    case 'D': return ELOG_LVL_DEBUG;
-    case 'V': return ELOG_LVL_VERBOSE;
-    default: return -1;
-    }
-#endif
 }
 
 /**
@@ -767,6 +616,8 @@ int8_t elog_find_lvl(const char *log) {
  * @return log tag, found failed will return NULL
  */
 const char *elog_find_tag(const char *log, uint8_t lvl, size_t *tag_len) {
+    extern const char *elog_port_get_time(void);
+
     const char *tag = NULL, *tag_end = NULL;
 
     ELOG_ASSERT(log);
@@ -776,12 +627,19 @@ const char *elog_find_tag(const char *log, uint8_t lvl, size_t *tag_len) {
     ELOG_ASSERT(elog.enabled_fmt_set[lvl] & ELOG_FMT_TAG);
 
 #ifdef ELOG_COLOR_ENABLE
-    tag = log + strlen(CSI_START) + strlen(color_output_info[lvl]) + strlen(level_output_info[lvl]);
+    if(elog.text_color_enabled)
+        tag = log + strlen(CSI_START) + strlen(color_output_info[lvl]) + strlen(level_output_info[lvl]) + 3; //3 = lvl前后的[]符号和一个空格
+    else
+        tag = log + strlen(level_output_info[lvl]) + 3; //3 = lvl前后的[]符号和一个空格
 #else
     tag = log + strlen(level_output_info[lvl]);
 #endif
+    if (get_fmt_enabled(lvl, ELOG_FMT_TIME)) {
+        tag = tag + strlen(elog_port_get_time()) + 3; //3 = 后面的"空格-空格"
+    }
+
     /* find the first space after tag */
-    if ((tag_end = memchr(tag, ' ', ELOG_FILTER_TAG_MAX_LEN)) != NULL) {
+    if ((tag_end = memchr(tag, ')', ELOG_FILTER_TAG_MAX_LEN)) != NULL) { /* 1970-01-01 00:29:50 - [ERROR  ] (TAG) */
         *tag_len = tag_end - tag;
     } else {
         tag = NULL;
@@ -815,51 +673,64 @@ void elog_hexdump(const char *name, uint8_t width, uint8_t *buf, uint16_t size)
     if (ELOG_LVL_DEBUG > elog.filter.level) {
         return;
     } else if (!strstr(name, elog.filter.tag)) { /* tag filter */
+        //TODO 可以考虑采用KMP及朴素模式匹配字符串，提升性能
         return;
     }
 
     /* lock output */
     elog_output_lock();
 
-    for (i = 0; i < size; i += width) {
+    for (i = 0; i < size; i += width)
+    {
         /* package header */
-        fmt_result = snprintf(log_buf, ELOG_LINE_BUF_SIZE, "D/HEX %s: %04X-%04X: ", name, i, i + width - 1);
+        fmt_result = snprintf(log_buf, ELOG_LINE_BUF_SIZE, "D/HEX %s: %04X-%04X: ", name, i, i + width);
         /* calculate log length */
-        if ((fmt_result > -1) && (fmt_result <= ELOG_LINE_BUF_SIZE)) {
+        if ((fmt_result > -1) && (fmt_result <= ELOG_LINE_BUF_SIZE))
+        {
             log_len = fmt_result;
-        } else {
+        }
+        else
+        {
             log_len = ELOG_LINE_BUF_SIZE;
         }
         /* dump hex */
-        for (j = 0; j < width; j++) {
-            if (i + j < size) {
+        for (j = 0; j < width; j++)
+        {
+            if (i + j < size)
+            {
                 snprintf(dump_string, sizeof(dump_string), "%02X ", buf[i + j]);
-            } else {
+            }
+            else
+            {
                 strncpy(dump_string, "   ", sizeof(dump_string));
             }
             log_len += elog_strcpy(log_len, log_buf + log_len, dump_string);
-            if ((j + 1) % 8 == 0) {
+            if ((j + 1) % 8 == 0)
+            {
                 log_len += elog_strcpy(log_len, log_buf + log_len, " ");
             }
         }
         log_len += elog_strcpy(log_len, log_buf + log_len, "  ");
         /* dump char for hex */
-        for (j = 0; j < width; j++) {
-            if (i + j < size) {
+        for (j = 0; j < width; j++)
+        {
+            if (i + j < size)
+            {
                 snprintf(dump_string, sizeof(dump_string), "%c", __is_print(buf[i + j]) ? buf[i + j] : '.');
                 log_len += elog_strcpy(log_len, log_buf + log_len, dump_string);
             }
         }
         /* overflow check and reserve some space for newline sign */
-        if (log_len + strlen(ELOG_NEWLINE_SIGN) > ELOG_LINE_BUF_SIZE) {
+        if (log_len + strlen(ELOG_NEWLINE_SIGN) > ELOG_LINE_BUF_SIZE)
+        {
             log_len = ELOG_LINE_BUF_SIZE - strlen(ELOG_NEWLINE_SIGN);
         }
         /* package newline sign */
         log_len += elog_strcpy(log_len, log_buf + log_len, ELOG_NEWLINE_SIGN);
         /* do log output */
 #if defined(ELOG_ASYNC_OUTPUT_ENABLE)
-        extern void elog_async_output(uint8_t level, const char *log, size_t size);
-        elog_async_output(ELOG_LVL_DEBUG, log_buf, log_len);
+        extern void elog_async_output(const char *log, size_t size);
+        elog_async_output(log_buf, log_len);
 #elif defined(ELOG_BUF_OUTPUT_ENABLE)
         extern void elog_buf_output(const char *log, size_t size);
     elog_buf_output(log_buf, log_len);
@@ -870,3 +741,67 @@ void elog_hexdump(const char *name, uint8_t width, uint8_t *buf, uint16_t size)
     /* unlock output */
     elog_output_unlock();
 }
+
+/**
+ * set output printf enable or disable
+ *
+ * @param enabled TRUE: enable FALSE: disable
+ */
+void elog_set_text_print_enabled(bool enabled)
+{
+    elog.text_print_enabled = enabled;
+}
+
+/**
+ * get output printf enable status
+ *
+ * @return enable or disable
+ */
+bool elog_get_text_print_enabled(void)
+{
+    return elog.text_print_enabled;
+}
+
+/**
+ * set log udp server ip
+ *
+ * @param ipaddr udp server ip
+ * @return set succeed or failed
+ */
+#define UDPSERVER_PORT (41234)
+bool elog_set_logserver_ip(const char *ipaddr)
+{
+    extern char l_serverip[24];
+    extern int  l_logsocket;
+
+    if( !ipaddr ){
+        memset(l_serverip, '\0', sizeof(l_serverip));
+#ifdef ELOG_ASYNC_OUTPUT_ENABLE
+        elog_async_enabled(true);
+#endif
+    }
+    else{
+        struct in_addr addr;
+        if( !inet_aton(ipaddr, &addr) ){ //错误的ip地址,输入地址不正确则会返回零
+            log_e("set udp server ip(%s) is Invalid!", ipaddr);
+            return false;
+        }
+
+        snprintf(l_serverip, sizeof(l_serverip), "%s", ipaddr);
+
+        struct sockaddr_in serveraddr;
+        bzero(&serveraddr, sizeof(serveraddr));
+        serveraddr.sin_family 		= AF_INET;
+        serveraddr.sin_port   		= htons(UDPSERVER_PORT);
+        serveraddr.sin_addr.s_addr 	= inet_addr(l_serverip);
+        sendto(l_logsocket, "Welcome back, debugger!", strlen("Welcome back, debugger!"),
+               0, (struct sockaddr*)&serveraddr, sizeof(serveraddr));
+#ifdef ELOG_ASYNC_OUTPUT_ENABLE
+        elog_async_enabled(false);
+#endif
+    }
+
+    return true;
+}
+
+

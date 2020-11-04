@@ -1,7 +1,7 @@
 /*
  * This file is part of the EasyLogger Library.
  *
- * Copyright (c) 2015-2019, Armink, <armink.ztl@gmail.com>
+ * Copyright (c) 2015-2017, Armink, <armink.ztl@gmail.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -46,15 +46,11 @@ extern "C" {
 #define ELOG_LVL_DEBUG                       4
 #define ELOG_LVL_VERBOSE                     5
 
-/* the output silent level and all level for filter setting */
-#define ELOG_FILTER_LVL_SILENT               ELOG_LVL_ASSERT
-#define ELOG_FILTER_LVL_ALL                  ELOG_LVL_VERBOSE
-
 /* output log's level total number */
 #define ELOG_LVL_TOTAL_NUM                   6
 
 /* EasyLogger software version number */
-#define ELOG_SW_VERSION                      "2.2.99"
+#define ELOG_SW_VERSION                      "2.0.0"
 
 /* EasyLogger assert for developer. */
 #ifdef ELOG_ASSERT_ENABLE
@@ -139,30 +135,22 @@ typedef enum {
 #define ELOG_FMT_ALL    (ELOG_FMT_LVL|ELOG_FMT_TAG|ELOG_FMT_TIME|ELOG_FMT_P_INFO|ELOG_FMT_T_INFO| \
     ELOG_FMT_DIR|ELOG_FMT_FUNC|ELOG_FMT_LINE)
 
-/* output log's tag filter */
-typedef struct {
-    uint8_t level;
-    char tag[ELOG_FILTER_TAG_MAX_LEN + 1];
-    bool tag_use_flag; /**< false : tag is no used   true: tag is used */
-} ElogTagLvlFilter, *ElogTagLvlFilter_t;
-
 /* output log's filter */
 typedef struct {
     uint8_t level;
     char tag[ELOG_FILTER_TAG_MAX_LEN + 1];
     char keyword[ELOG_FILTER_KW_MAX_LEN + 1];
-    ElogTagLvlFilter tag_lvl[ELOG_FILTER_TAG_LVL_MAX_NUM];
 } ElogFilter, *ElogFilter_t;
 
 /* easy logger */
 typedef struct {
     ElogFilter filter;
     size_t enabled_fmt_set[ELOG_LVL_TOTAL_NUM];
-    bool init_ok;
     bool output_enabled;
     bool output_lock_enabled;
     bool output_is_locked_before_enable;
     bool output_is_locked_before_disable;
+    bool text_print_enabled; //2018.12.16 -by zhsun
 
 #ifdef ELOG_COLOR_ENABLE
     bool text_color_enabled;
@@ -173,9 +161,22 @@ typedef struct {
 /* EasyLogger error code */
 typedef enum {
     ELOG_NO_ERR,
+    ELOG_SOCKET_ERR,
 } ElogErrCode;
 
 /* elog.c */
+/* level output info */
+extern const char *level_output_info[6];
+#ifdef ELOG_COLOR_ENABLE
+/* color output info */
+#ifdef __LINUX__
+extern const char *color_output_info[6];
+#endif /* __LINUX__ */
+#ifdef __WIN32__
+extern const WORD color_output_info[];
+#endif /* __WIN32__ */
+#endif /* ELOG_COLOR_ENABLE */
+
 ElogErrCode elog_init(void);
 void elog_start(void);
 void elog_set_output_enabled(bool enabled);
@@ -185,10 +186,10 @@ bool elog_get_text_color_enabled(void);
 void elog_set_fmt(uint8_t level, size_t set);
 void elog_set_filter(uint8_t level, const char *tag, const char *keyword);
 void elog_set_filter_lvl(uint8_t level);
+uint8_t elog_get_filter_lvl(void);
 void elog_set_filter_tag(const char *tag);
 void elog_set_filter_kw(const char *keyword);
-void elog_set_filter_tag_lvl(const char *tag, uint8_t level);
-uint8_t elog_get_filter_tag_lvl(const char *tag);
+char* elog_get_filter_kw();
 void elog_raw(const char *format, ...);
 void elog_output(uint8_t level, const char *tag, const char *file, const char *func,
         const long line, const char *format, ...);
@@ -198,6 +199,10 @@ void elog_assert_set_hook(void (*hook)(const char* expr, const char* func, size_
 int8_t elog_find_lvl(const char *log);
 const char *elog_find_tag(const char *log, uint8_t lvl, size_t *tag_len);
 void elog_hexdump(const char *name, uint8_t width, uint8_t *buf, uint16_t size);
+//2018.12.26 -by zhsun
+void elog_set_text_print_enabled(bool enabled);
+bool elog_get_text_print_enabled(void);
+bool elog_set_logserver_ip(const char *ipaddr);
 
 #define elog_a(tag, ...)     elog_assert(tag, __VA_ARGS__)
 #define elog_e(tag, ...)     elog_error(tag, __VA_ARGS__)
